@@ -70,6 +70,24 @@
   color: #ccc;
 }
 
+.mini-day.sunday {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.mini-day.saturday {
+  color: #007bff;
+  font-weight: 600;
+}
+
+.mini-day.other.sunday {
+  color: #f8d7da;
+}
+
+.mini-day.other.saturday {
+  color: #b3d4fc;
+}
+
 .main-header {
   flex: 1;
   text-align: center;
@@ -240,16 +258,55 @@
 }
 
 .holiday-info {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: fit-content;
+}
+
+.holiday-item {
   font-size: 12px;
   color: #dc3545;
   font-weight: 600;
-  margin-top: auto;
   background: rgba(220, 53, 69, 0.1);
   padding: 3px 8px;
   border-radius: 12px;
   text-align: center;
   border: 1px solid rgba(220, 53, 69, 0.3);
-  max-width: fit-content;
+}
+
+/* 대체공휴일 스타일 */
+.holiday-substitute .holiday-item {
+  background: rgba(255, 193, 7, 0.1);
+  color: #856404;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.holiday-substitute .day-number {
+  color: #856404;
+}
+
+/* 추석 연휴 스타일 */
+.holiday-chuseok .holiday-item {
+  background: rgba(255, 87, 34, 0.1);
+  color: #bf360c;
+  border: 1px solid rgba(255, 87, 34, 0.3);
+}
+
+.holiday-chuseok .day-number {
+  color: #bf360c;
+}
+
+/* 설날 연휴 스타일 */
+.holiday-lunar_new_year .holiday-item {
+  background: rgba(156, 39, 176, 0.1);
+  color: #7b1fa2;
+  border: 1px solid rgba(156, 39, 176, 0.3);
+}
+
+.holiday-lunar_new_year .day-number {
+  color: #7b1fa2;
 }
 
 @media (max-width: 768px) {
