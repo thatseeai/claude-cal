@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import KoreanLunarCalendar from 'korean-lunar-calendar'
 import Holidays from 'date-holidays'
 import './Calendar.css'
@@ -22,17 +22,18 @@ interface CalendarDate {
 
 const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const [calendarDates, setCalendarDates] = useState<CalendarDate[][]>([])
-  const holidays = new Holidays('KR')
+  // Holidays 인스턴스를 한 번만 생성하여 참조가 매 렌더마다 바뀌지 않도록 함
+  const holidays = useMemo(() => new Holidays('KR'), [])
 
-  const getDaysInMonth = (date: Date) => {
+  const getDaysInMonth = useCallback((date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
-  }
+  }, [])
 
-  const getFirstDayOfMonth = (date: Date) => {
+  const getFirstDayOfMonth = useCallback((date: Date) => {
     return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
-  }
+  }, [])
 
-  const getLunarDate = (year: number, month: number, day: number) => {
+  const getLunarDate = useCallback((year: number, month: number, day: number) => {
     try {
       const lunar = new KoreanLunarCalendar()
       lunar.setSolarDate(year, month, day)
@@ -66,77 +67,11 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
       console.error('Lunar date calculation error:', error)
       return ''
     }
-  }
+  }, [])
 
-  const getAllHolidayInfo = (year: number, month: number, day: number) => {
-    const holidayList = holidays.getHolidays(year)
-    const targetDate = new Date(year, month - 1, day)
-    const allHolidays: string[] = []
-    const uniqueHolidays = new Set<string>()
-    let primaryHolidayType: 'normal' | 'substitute' | 'lunar_new_year' | 'chuseok' | '' = ''
+  
 
-    // 정규 공휴일 확인 (모든 겹치는 공휴일 수집)
-    for (const holiday of holidayList) {
-      const holidayDate = new Date(holiday.date)
-      if (holidayDate.toDateString() === targetDate.toDateString()) {
-        // 제헌절은 2008년부터 공휴일이 아님 - 라이브러리 오류 수정
-        if (holiday.name.includes('제헌절')) {
-          continue
-        }
-
-        uniqueHolidays.add(holiday.name)
-
-        if (!primaryHolidayType) {
-          if (holiday.substitute) {
-            primaryHolidayType = 'substitute'
-          } else if (holiday.name.includes('설날') || holiday.name.includes('신정')) {
-            primaryHolidayType = 'lunar_new_year'
-          } else if (holiday.name.includes('추석')) {
-            primaryHolidayType = 'chuseok'
-          } else {
-            primaryHolidayType = 'normal'
-          }
-        }
-      }
-    }
-
-    // 음력 공휴일 연휴 확인 (추석, 설날) - 중복 방지
-    const lunarHolidayInfo = getLunarHolidayInfo(year, month, day)
-    if (lunarHolidayInfo.name) {
-      // 이미 같은 종류의 공휴일이 있는지 확인 (예: 추석과 추석 연휴)
-      const hasSimilarHoliday = Array.from(uniqueHolidays).some(h =>
-        (h.includes('추석') && lunarHolidayInfo.name.includes('추석')) ||
-        (h.includes('설날') && lunarHolidayInfo.name.includes('설날'))
-      )
-
-      if (!hasSimilarHoliday) {
-        uniqueHolidays.add(lunarHolidayInfo.name)
-        if (!primaryHolidayType) {
-          primaryHolidayType = lunarHolidayInfo.type
-        }
-      }
-    }
-
-    // 대체공휴일 확인 (기존 공휴일이 없는 날에만)
-    if (uniqueHolidays.size === 0) {
-      const substituteInfo = getSubstituteHolidayInfo(year, month, day, holidayList)
-      if (substituteInfo.name) {
-        uniqueHolidays.add(substituteInfo.name)
-        primaryHolidayType = substituteInfo.type
-      }
-    }
-
-    // Set을 배열로 변환
-    allHolidays.push(...Array.from(uniqueHolidays))
-
-    return {
-      name: allHolidays[0] || '',
-      names: allHolidays,
-      type: primaryHolidayType
-    }
-  }
-
-  const getLunarHolidayInfo = (year: number, month: number, day: number) => {
+  const getLunarHolidayInfo = useCallback((year: number, month: number, day: number) => {
     try {
       const lunar = new KoreanLunarCalendar()
       lunar.setSolarDate(year, month, day)
@@ -194,9 +129,9 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     } catch {
       return { name: '', type: '' as const }
     }
-  }
+  }, [])
 
-  const getHolidaySubstituteType = (holidayName: string) => {
+  const getHolidaySubstituteType = useCallback((holidayName: string) => {
     // 그룹 1: 토요일 | 일요일 | 다른 공휴일과 겹치는 경우 대체공휴일
     const group1Holidays = ['삼일절', '3·1절', '광복절', '개천절', '한글날', '어린이날']
 
@@ -217,38 +152,11 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     }
 
     return 'none' // 기본값
-  }
+  }, [])
 
-  const getSubstituteHolidayInfo = (year: number, month: number, day: number, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
-    const targetDate = new Date(year, month - 1, day)
-    const dayOfWeek = targetDate.getDay()
+  
 
-    // 평일인 경우만 대체공휴일 가능 (월~금)
-    if (dayOfWeek < 1 || dayOfWeek > 5) {
-      return { name: '', type: '' as const }
-    }
-
-    // 오늘이 이미 공휴일인지 확인
-    const isTargetHoliday = isDateHoliday(targetDate, holidayList)
-    if (isTargetHoliday) {
-      return { name: '', type: '' as const }
-    }
-
-    // 최대 7일 역방향 확인하여 대체공휴일 발생 조건 찾기
-    for (let daysBack = 1; daysBack <= 7; daysBack++) {
-      const checkDate = new Date(targetDate)
-      checkDate.setDate(checkDate.getDate() - daysBack)
-
-      const substituteInfo = checkForSubstituteHoliday(checkDate, targetDate, holidayList)
-      if (substituteInfo.isSubstitute) {
-        return { name: '대체공휴일', type: 'substitute' as const }
-      }
-    }
-
-    return { name: '', type: '' as const }
-  }
-
-  const isDateHoliday = (date: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
+  const isDateHoliday = useCallback((date: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
     // 정규 공휴일 확인
     for (const holiday of holidayList) {
       const holidayDate = new Date(holiday.date)
@@ -264,9 +172,35 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     // 음력 공휴일 확인
     const lunarInfo = getLunarHolidayInfo(date.getFullYear(), date.getMonth() + 1, date.getDate())
     return lunarInfo.name !== ''
-  }
+  }, [getLunarHolidayInfo])
 
-  const checkForSubstituteHoliday = (originalDate: Date, targetDate: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
+  const findNextWorkday = useCallback((fromDate: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
+    const nextDay = new Date(fromDate)
+    nextDay.setDate(nextDay.getDate() + 1)
+
+    // 주말과 공휴일을 건너뛰어 다음 평일 찾기
+    while (true) {
+      const dayOfWeek = nextDay.getDay()
+
+      // 주말이면 다음날로
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        nextDay.setDate(nextDay.getDate() + 1)
+        continue
+      }
+
+      // 평일이면서 공휴일이 아닌지 확인
+      if (!isDateHoliday(nextDay, holidayList)) {
+        break
+      }
+
+      // 공휴일이면 다음날로
+      nextDay.setDate(nextDay.getDate() + 1)
+    }
+
+    return nextDay
+  }, [isDateHoliday])
+
+  const checkForSubstituteHoliday = useCallback((originalDate: Date, targetDate: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
     const originalDayOfWeek = originalDate.getDay()
 
     // 해당 날짜의 모든 공휴일 수집
@@ -343,33 +277,108 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     return {
       isSubstitute: nextWorkday.toDateString() === targetDate.toDateString()
     }
-  }
+  }, [getHolidaySubstituteType, getLunarHolidayInfo, findNextWorkday])
 
-  const findNextWorkday = (fromDate: Date, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
-    const nextDay = new Date(fromDate)
-    nextDay.setDate(nextDay.getDate() + 1)
+  const getSubstituteHolidayInfo = useCallback((year: number, month: number, day: number, holidayList: Array<{date: string, name: string, substitute?: boolean}>) => {
+    const targetDate = new Date(year, month - 1, day)
+    const dayOfWeek = targetDate.getDay()
 
-    // 주말과 공휴일을 건너뛰어 다음 평일 찾기
-    while (true) {
-      const dayOfWeek = nextDay.getDay()
-
-      // 주말이면 다음날로
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        nextDay.setDate(nextDay.getDate() + 1)
-        continue
-      }
-
-      // 평일이면서 공휴일이 아닌지 확인
-      if (!isDateHoliday(nextDay, holidayList)) {
-        break
-      }
-
-      // 공휴일이면 다음날로
-      nextDay.setDate(nextDay.getDate() + 1)
+    // 평일인 경우만 대체공휴일 가능 (월~금)
+    if (dayOfWeek < 1 || dayOfWeek > 5) {
+      return { name: '', type: '' as const }
     }
 
-    return nextDay
-  }
+    // 오늘이 이미 공휴일인지 확인
+    const isTargetHoliday = isDateHoliday(targetDate, holidayList)
+    if (isTargetHoliday) {
+      return { name: '', type: '' as const }
+    }
+
+    // 최대 7일 역방향 확인하여 대체공휴일 발생 조건 찾기
+    for (let daysBack = 1; daysBack <= 7; daysBack++) {
+      const checkDate = new Date(targetDate)
+      checkDate.setDate(checkDate.getDate() - daysBack)
+
+      const substituteInfo = checkForSubstituteHoliday(checkDate, targetDate, holidayList)
+      if (substituteInfo.isSubstitute) {
+        return { name: '대체공휴일', type: 'substitute' as const }
+      }
+    }
+
+    return { name: '', type: '' as const }
+  }, [isDateHoliday, checkForSubstituteHoliday])
+
+  const getAllHolidayInfo = useCallback((year: number, month: number, day: number) => {
+    const holidayList = holidays.getHolidays(year)
+    const targetDate = new Date(year, month - 1, day)
+    const allHolidays: string[] = []
+    const uniqueHolidays = new Set<string>()
+    let primaryHolidayType: 'normal' | 'substitute' | 'lunar_new_year' | 'chuseok' | '' = ''
+
+    // 정규 공휴일 확인 (모든 겹치는 공휴일 수집)
+    for (const holiday of holidayList) {
+      const holidayDate = new Date(holiday.date)
+      if (holidayDate.toDateString() === targetDate.toDateString()) {
+        // 제헌절은 2008년부터 공휴일이 아님 - 라이브러리 오류 수정
+        if (holiday.name.includes('제헌절')) {
+          continue
+        }
+
+        uniqueHolidays.add(holiday.name)
+
+        if (!primaryHolidayType) {
+          if (holiday.substitute) {
+            primaryHolidayType = 'substitute'
+          } else if (holiday.name.includes('설날') || holiday.name.includes('신정')) {
+            primaryHolidayType = 'lunar_new_year'
+          } else if (holiday.name.includes('추석')) {
+            primaryHolidayType = 'chuseok'
+          } else {
+            primaryHolidayType = 'normal'
+          }
+        }
+      }
+    }
+
+    // 음력 공휴일 연휴 확인 (추석, 설날) - 중복 방지
+    const lunarHolidayInfo = getLunarHolidayInfo(year, month, day)
+    if (lunarHolidayInfo.name) {
+      // 이미 같은 종류의 공휴일이 있는지 확인 (예: 추석과 추석 연휴)
+      const hasSimilarHoliday = Array.from(uniqueHolidays).some(h =>
+        (h.includes('추석') && lunarHolidayInfo.name.includes('추석')) ||
+        (h.includes('설날') && lunarHolidayInfo.name.includes('설날'))
+      )
+
+      if (!hasSimilarHoliday) {
+        uniqueHolidays.add(lunarHolidayInfo.name)
+        if (!primaryHolidayType) {
+          primaryHolidayType = lunarHolidayInfo.type
+        }
+      }
+    }
+
+    // 대체공휴일 확인 (기존 공휴일이 없는 날에만)
+    if (uniqueHolidays.size === 0) {
+      const substituteInfo = getSubstituteHolidayInfo(year, month, day, holidayList)
+      if (substituteInfo.name) {
+        uniqueHolidays.add(substituteInfo.name)
+        primaryHolidayType = substituteInfo.type
+      }
+    }
+
+    // Set을 배열로 변환
+    allHolidays.push(...Array.from(uniqueHolidays))
+
+    return {
+      name: allHolidays[0] || '',
+      names: allHolidays,
+      type: primaryHolidayType
+    }
+  }, [holidays, getLunarHolidayInfo, getSubstituteHolidayInfo])
+
+  
+
+  
 
 
   const generateCalendarDates = useCallback((date: Date) => {
@@ -444,7 +453,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     }
 
     return weeks
-  }, [getLunarDate, getAllHolidayInfo])
+  }, [getDaysInMonth, getFirstDayOfMonth, getLunarDate, getAllHolidayInfo])
 
 
   const getZodiacInfo = (year: number) => {
