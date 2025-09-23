@@ -119,16 +119,23 @@
   position: relative;
 }
 
-.main-header h1 {
-  font-size: 36px;
+.zodiac-year-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 5px;
+}
+
+.year-month-display {
+  font-size: 32px;
   font-weight: 700;
-  margin: 0;
   color: #2c3e50;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: relative;
 }
 
-.main-header h1::after {
+.year-month-display::after {
   content: '';
   position: absolute;
   bottom: -8px;
@@ -138,6 +145,18 @@
   height: 3px;
   background: linear-gradient(90deg, #007bff, #6c757d);
   border-radius: 2px;
+}
+
+.zodiac-info {
+  font-size: 36px;
+  display: block;
+  transition: transform 0.3s ease;
+  cursor: help;
+  margin-bottom: 2px;
+}
+
+.zodiac-info:hover {
+  transform: scale(1.2);
 }
 
 .calendar-main {

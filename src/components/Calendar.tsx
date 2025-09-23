@@ -421,6 +421,30 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   }
 
 
+  const getZodiacInfo = (year: number) => {
+    // 십이지 순서: 쥐, 소, 범, 토끼, 용, 뱀, 말, 양, 원숭이, 닭, 개, 돼지
+    const zodiacAnimals = [
+      { name: '쥐띠', emoji: '🐭' },      // 0: 자(子)
+      { name: '소띠', emoji: '🐮' },      // 1: 축(丑)
+      { name: '범띠', emoji: '🐯' },      // 2: 인(寅)
+      { name: '토끼띠', emoji: '🐰' },    // 3: 묘(卯)
+      { name: '용띠', emoji: '🐲' },      // 4: 진(辰)
+      { name: '뱀띠', emoji: '🐍' },      // 5: 사(巳)
+      { name: '말띠', emoji: '🐴' },      // 6: 오(午)
+      { name: '양띠', emoji: '🐑' },      // 7: 미(未)
+      { name: '원숭이띠', emoji: '🐵' },  // 8: 신(申)
+      { name: '닭띠', emoji: '🐓' },      // 9: 유(酉)
+      { name: '개띠', emoji: '🐶' },      // 10: 술(戌)
+      { name: '돼지띠', emoji: '🐷' }     // 11: 해(亥)
+    ]
+
+    // 1900년이 쥐띠(자년)이므로 기준점으로 사용
+    const baseYear = 1900
+    const zodiacIndex = (year - baseYear) % 12
+
+    return zodiacAnimals[zodiacIndex]
+  }
+
   const navigateToMonth = (targetDate: Date) => {
     onDateChange(targetDate)
   }
@@ -474,6 +498,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     '7월', '8월', '9월', '10월', '11월', '12월'
   ]
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+  const zodiacInfo = getZodiacInfo(year)
 
   return (
     <div className="calendar-container" tabIndex={0}>
@@ -502,7 +527,14 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         </div>
 
         <div className="main-header">
-          <h1>{year}년 {monthNames[month]}</h1>
+          <div className="zodiac-year-container">
+            <span className="zodiac-info" title={zodiacInfo.name}>
+              {zodiacInfo.emoji}
+            </span>
+            <div className="year-month-display">
+              {year}년 {monthNames[month]}
+            </div>
+          </div>
         </div>
 
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month + 1))}>
