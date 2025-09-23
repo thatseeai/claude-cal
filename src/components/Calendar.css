@@ -6,6 +6,31 @@
   font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   min-height: 100vh;
+  outline: none;
+  position: relative;
+}
+
+.calendar-container:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 4px;
+}
+
+.keyboard-navigation-hint {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 123, 255, 0.1);
+  color: #007bff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.calendar-container:focus .keyboard-navigation-hint {
+  opacity: 1;
 }
 
 .calendar-header {

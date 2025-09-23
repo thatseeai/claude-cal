@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import KoreanLunarCalendar from 'korean-lunar-calendar'
 import Holidays from 'date-holidays'
 import './Calendar.css'
@@ -425,9 +425,47 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     onDateChange(targetDate)
   }
 
+  const handleKeyNavigation = useCallback((event: KeyboardEvent) => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+
+    switch (event.key) {
+      case 'ArrowLeft':
+        // 이전 달로 이동
+        event.preventDefault()
+        onDateChange(new Date(year, month - 1, 1))
+        break
+      case 'ArrowRight':
+        // 다음 달로 이동
+        event.preventDefault()
+        onDateChange(new Date(year, month + 1, 1))
+        break
+      case 'ArrowUp':
+        // 이전 년도로 이동
+        event.preventDefault()
+        onDateChange(new Date(year - 1, month, 1))
+        break
+      case 'ArrowDown':
+        // 다음 년도로 이동
+        event.preventDefault()
+        onDateChange(new Date(year + 1, month, 1))
+        break
+    }
+  }, [currentDate, onDateChange])
+
   useEffect(() => {
     setCalendarDates(generateCalendarDates(currentDate))
   }, [currentDate])
+
+  useEffect(() => {
+    // 키보드 이벤트 리스너 등록
+    document.addEventListener('keydown', handleKeyNavigation)
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      document.removeEventListener('keydown', handleKeyNavigation)
+    }
+  }, [handleKeyNavigation])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -438,7 +476,12 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const dayNames = ['일', '월', '화', '수', '목', '금', '토']
 
   return (
-    <div className="calendar-container">
+    <div className="calendar-container" tabIndex={0}>
+      {/* Keyboard navigation hint */}
+      <div className="keyboard-navigation-hint">
+        ← → 월 이동 | ↑ ↓ 연도 이동
+      </div>
+
       {/* Header with mini calendars */}
       <div className="calendar-header">
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month - 1))}>
