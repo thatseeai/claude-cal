@@ -465,14 +465,14 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         onDateChange(new Date(year, month + 1, 1))
         break
       case 'ArrowUp':
-        // 이전 년도로 이동
-        event.preventDefault()
-        onDateChange(new Date(year - 1, month, 1))
-        break
-      case 'ArrowDown':
         // 다음 년도로 이동
         event.preventDefault()
         onDateChange(new Date(year + 1, month, 1))
+        break
+      case 'ArrowDown':
+        // 이전 년도로 이동
+        event.preventDefault()
+        onDateChange(new Date(year - 1, month, 1))
         break
     }
   }, [currentDate, onDateChange])
