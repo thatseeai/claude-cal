@@ -21,7 +21,7 @@ function App() {
   })
 
   // 디바운싱을 위한 타이머 참조
-  const urlUpdateTimer = useRef<NodeJS.Timeout | null>(null)
+  const urlUpdateTimer = useRef<number | null>(null)
 
   // 날짜가 변경될 때마다 URL 업데이트 (디바운싱 적용)
   useEffect(() => {

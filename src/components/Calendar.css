@@ -52,29 +52,188 @@
   opacity: 1;
 }
 
-/* 모바일/터치 기기에서는 터치 힌트 표시 */
-@media (hover: none) and (pointer: coarse) {
-  .keyboard-navigation-hint {
-    display: none;
-  }
-
-  .touch-navigation-hint {
-    display: block;
-    opacity: 1;
-  }
+/* 스크롤 힌트 스타일 */
+.scroll-navigation-hint {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  opacity: 1;
+  white-space: nowrap;
 }
 
-/* 작은 화면에서 폰트 크기 조정 */
+/* 모바일 뷰 스타일 - 긴 달력 형태 */
+.mobile-view.calendar-container {
+  padding: 0;
+  height: 100vh;
+  height: 100dvh; /* 동적 뷰포트 높이 사용 (최신 브라우저) */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  background: white;
+  /* iOS 바운스 효과 방지 */
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overscroll-behavior: none;
+  -webkit-overscroll-behavior-y: none;
+  /* 추가적인 iOS Safari 바운스 방지 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 터치 액션 제한으로 브라우저 기본 동작 방지 */
+  touch-action: pan-y;
+}
+
+/* 상단 고정 요일 헤더 */
+.unified-calendar-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(135deg, #2c3e50 0%, #4a6741 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.unified-calendar-header .calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin: 0;
+  padding: 12px 8px;
+}
+
+.unified-calendar-header .weekday {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.unified-calendar-header .weekday.sunday {
+  color: #ff6b6b;
+}
+
+.unified-calendar-header .weekday.saturday {
+  color: #4dabf7;
+}
+
+/* 긴 달력 컨테이너 */
+.endless-calendar {
+  width: 100%;
+  background: white;
+  /* transition 제거하여 즉각적인 반응 */
+  transform: translateY(0px);
+}
+
+/* 월별 섹션 - 카드 형태 제거하고 연속적으로 */
+.month-section {
+  margin: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* 간결한 월 구분선 */
+.month-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, transparent 0%, rgba(44, 62, 80, 0.1) 20%, rgba(44, 62, 80, 0.1) 80%, transparent 100%);
+  border-top: 1px solid #e3e8ec;
+  margin: 0;
+}
+
+.zodiac-info-small {
+  font-size: 16px;
+}
+
+.year-month-compact {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* 모바일에서 미니 달력 숨김 */
+.mobile-view .calendar-header {
+  display: none;
+}
+
+/* 모바일 달력 그리드 */
+.mobile-view .calendar-grid {
+  padding: 0 8px;
+  margin: 0;
+}
+
+.mobile-view .calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.mobile-view .calendar-day {
+  min-height: 70px;
+  margin: 0;
+  border: 1px solid #f1f3f4;
+  background: white;
+}
+
+.mobile-view .calendar-day.other-month {
+  background: #f8f9fa;
+  opacity: 0.6;
+}
+
+/* 데스크톱에서 모바일 스타일 숨김 */
+.desktop-view .scroll-navigation-hint,
+.desktop-view .endless-calendar,
+.desktop-view .month-section,
+.desktop-view .unified-calendar-header {
+  display: none;
+}
+
+/* 모바일 반응형 조정 */
 @media (max-width: 768px) {
   .navigation-hints {
     top: 5px;
     right: 5px;
+    z-index: 200;
   }
 
   .keyboard-navigation-hint,
-  .touch-navigation-hint {
+  .scroll-navigation-hint {
     font-size: 10px;
     padding: 4px 8px;
+  }
+
+  .unified-calendar-header .weekday {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+
+  .month-divider {
+    padding: 6px 8px;
+  }
+
+  .year-month-compact {
+    font-size: 12px;
+  }
+
+  .zodiac-info-small {
+    font-size: 14px;
+  }
+
+  .mobile-view .calendar-day {
+    min-height: 60px;
+    font-size: 12px;
+  }
+
+  .mobile-view .calendar-grid {
+    padding: 0 4px;
   }
 }
 

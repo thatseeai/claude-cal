@@ -35,6 +35,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         lunarCache.current.clear()
         holidayCache.current.clear()
         calendarCache.current.clear()
+        precomputedMonths.current.clear()
         console.log('캐시가 클리어되었습니다.')
         // 페이지 새로고침으로 강제 재렌더링
         window.location.reload()
@@ -577,105 +578,345 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     }
   }, [currentDate, onDateChange])
 
-  // 터치/스와이프 제스처 처리
-  const handleTouchGesture = useCallback(() => {
-    let touchStartX = 0
-    let touchStartY = 0
-    let touchStartTime = 0
+  // 모바일 감지
+  const isMobile = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth <= 768 || ('ontouchstart' in window)
+    }
+    return false
+  }, [])
 
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length === 1) {
-        const touch = event.touches[0]
-        touchStartX = touch.clientX
-        touchStartY = touch.clientY
-        touchStartTime = Date.now()
+  // 모바일용 동적 달력 데이터 상태 - 초기값은 빈 배열
+  const [endlessCalendarData, setEndlessCalendarData] = useState<Array<{date: Date, data: CalendarDate[][], key: string}>>([])
+
+  // 고정 윈도우 방식: 항상 정확히 49개월(±24)을 유지
+  const WINDOW_SIZE = 49 // 고정된 윈도우 크기
+  const CENTER_INDEX = 24 // 중심 인덱스 (0-based)
+  const baseDate = useRef<Date>(new Date()) // 기준 날짜 (변경되지 않음)
+
+  // 고정 윈도우 데이터 초기화
+  useEffect(() => {
+    if (isMobile && endlessCalendarData.length === 0) {
+      const months = []
+      const today = baseDate.current
+
+      for (let i = 0; i < WINDOW_SIZE; i++) {
+        const offset = i - CENTER_INDEX // -24 ~ +24
+        const monthDate = new Date(today.getFullYear(), today.getMonth() + offset, 1)
+        const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`
+        const data = generateCalendarDates(monthDate)
+
+        precomputedMonths.current.set(key, data)
+        months.push({
+          date: monthDate,
+          data,
+          key
+        })
       }
+      setEndlessCalendarData(months)
+    }
+  }, [isMobile, generateCalendarDates, endlessCalendarData.length])
+
+  // 미리 계산된 데이터 캐시 (성능 향상을 위해)
+  const precomputedMonths = useRef(new Map<string, CalendarDate[][]>())
+
+
+  // 스크롤 위치 보존을 위한 상태
+  const scrollPositionRef = useRef<number>(0)
+  const isUpdatingData = useRef(false)
+
+  // 동기적 슬라이딩 윈도우
+  const windowOffsetRef = useRef<number>(0) // 현재 윈도우의 시작 오프셋
+
+  const updateSlidingWindowSmoothly = useCallback(() => {
+    const container = document.querySelector('.mobile-view') as HTMLElement
+    if (!container || isUpdatingData.current || endlessCalendarData.length === 0) return
+
+    const scrollPosition = container.scrollTop
+    const scrollHeight = container.scrollHeight
+    const averageMonthHeight = scrollHeight / WINDOW_SIZE
+
+    // 현재 보고 있는 월 인덱스 (윈도우 내에서)
+    const currentWindowIndex = Math.floor(scrollPosition / averageMonthHeight)
+
+    // 윈도우를 슬라이드해야 하는지 확인
+    const buffer = 8 // 앞뒤 8개월 버퍼
+    let needsUpdate = false
+    let newOffset = windowOffsetRef.current
+
+    // 상단 근처에 도달했을 때 윈도우를 왼쪽으로 슬라이드
+    if (currentWindowIndex < buffer) {
+      newOffset -= buffer
+      needsUpdate = true
+    }
+    // 하단 근처에 도달했을 때 윈도우를 오른쪽으로 슬라이드
+    else if (currentWindowIndex >= WINDOW_SIZE - buffer) {
+      newOffset += buffer
+      needsUpdate = true
     }
 
-    const handleTouchEnd = (event: TouchEvent) => {
-      if (event.changedTouches.length === 1) {
-        const touch = event.changedTouches[0]
-        const touchEndX = touch.clientX
-        const touchEndY = touch.clientY
-        const touchEndTime = Date.now()
+    if (needsUpdate) {
+      isUpdatingData.current = true
 
-        const deltaX = touchEndX - touchStartX
-        const deltaY = touchEndY - touchStartY
-        const deltaTime = touchEndTime - touchStartTime
+      // 동기적 업데이트: 스크롤 이벤트를 일시적으로 비활성화하고 동시 처리
+      container.style.scrollBehavior = 'auto'
 
-        // 스와이프 조건: 50px 이상 이동, 500ms 이내, 가로/세로 비율 확인
-        const minSwipeDistance = 50
-        const maxSwipeTime = 500
-        const isValidSwipe = Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance
-        const isQuickSwipe = deltaTime < maxSwipeTime
+      // 현재 스크롤 위치 저장
+      const currentScroll = container.scrollTop
 
-        if (isValidSwipe && isQuickSwipe) {
-          const year = currentDate.getFullYear()
-          const month = currentDate.getMonth()
+      // 데이터 업데이트
+      windowOffsetRef.current = newOffset
 
-          // 가로 스와이프 (월 이동)
-          if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            event.preventDefault()
-            if (deltaX > 0) {
-              // 오른쪽 스와이프 - 이전 달
-              onDateChange(new Date(year, month - 1, 1))
-            } else {
-              // 왼쪽 스와이프 - 다음 달
-              onDateChange(new Date(year, month + 1, 1))
-            }
+      setEndlessCalendarData(() => {
+        const newData = []
+        const today = baseDate.current
+
+        // 새 윈도우 위치에 맞는 데이터 생성
+        for (let i = 0; i < WINDOW_SIZE; i++) {
+          const offset = newOffset + (i - CENTER_INDEX)
+          const monthDate = new Date(today.getFullYear(), today.getMonth() + offset, 1)
+          const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`
+
+          let data = precomputedMonths.current.get(key)
+          if (!data) {
+            data = generateCalendarDates(monthDate)
+            precomputedMonths.current.set(key, data)
           }
-          // 세로 스와이프 (연도 이동)
-          else if (Math.abs(deltaY) > Math.abs(deltaX)) {
-            event.preventDefault()
-            if (deltaY < 0) {
-              // 위쪽 스와이프 - 이전 년도
-              onDateChange(new Date(year - 1, month, 1))
-            } else {
-              // 아래쪽 스와이프 - 다음 년도
-              onDateChange(new Date(year + 1, month, 1))
-            }
-          }
+
+          newData.push({
+            date: monthDate,
+            data,
+            key
+          })
         }
-      }
+
+        return newData
+      })
+
+      // 즉시 스크롤 위치 조정 (flushSync 효과를 위해 강제 동기화)
+      requestAnimationFrame(() => {
+        const adjustedScrollPosition = currentWindowIndex < buffer
+          ? currentScroll + (buffer * averageMonthHeight)
+          : currentScroll - (buffer * averageMonthHeight)
+
+        // 스크롤 위치 즉시 조정
+        container.scrollTop = Math.max(0, adjustedScrollPosition)
+        scrollPositionRef.current = container.scrollTop
+
+        // 다음 프레임에서 업데이트 완료 표시
+        requestAnimationFrame(() => {
+          isUpdatingData.current = false
+        })
+      })
+    }
+  }, [endlessCalendarData.length, generateCalendarDates])
+
+  // 사용자 스크롤 시점 추적
+  const lastUserScrollTime = useRef<number>(0)
+
+
+  // IntersectionObserver 기반 무한 스크롤 (더 부드러운 경험)
+  const topSentinelRef = useRef<HTMLDivElement | null>(null)
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  // 스크롤 이벤트 핸들러 (단순히 위치만 추적)
+  const scrollTimeout = useRef<number | null>(null)
+  const handleMobileScroll = useCallback((event: Event) => {
+    const target = event.target as HTMLElement
+    if (!target || !target.classList.contains('mobile-view')) return
+
+    // 현재 스크롤 위치만 저장 (데이터 업데이트는 IntersectionObserver가 담당)
+    scrollPositionRef.current = target.scrollTop
+    lastUserScrollTime.current = Date.now()
+  }, [])
+
+  // IntersectionObserver 설정 (CSS Transform 방식)
+  useEffect(() => {
+    if (!isMobile) return
+
+    if (observerRef.current) {
+      observerRef.current.disconnect()
     }
 
-    return { handleTouchStart, handleTouchEnd }
-  }, [currentDate, onDateChange])
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (isUpdatingData.current) return
 
-  const touchHandlers = handleTouchGesture()
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            // 센티널이 보이면 CSS Transform 기반 업데이트
+            updateSlidingWindowSmoothly()
+          }
+        })
+      },
+      {
+        rootMargin: '300px', // 충분한 여유로 미리 준비
+        threshold: 0
+      }
+    )
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [isMobile, updateSlidingWindowSmoothly])
+
+  // 센티널 요소들이 DOM에 추가될 때마다 관찰 시작
+  useEffect(() => {
+    if (!isMobile || !observerRef.current) return
+
+    const topSentinel = topSentinelRef.current
+    const bottomSentinel = bottomSentinelRef.current
+
+    if (topSentinel && bottomSentinel) {
+      observerRef.current.observe(topSentinel)
+      observerRef.current.observe(bottomSentinel)
+    }
+
+    return () => {
+      if (observerRef.current && topSentinel && bottomSentinel) {
+        observerRef.current.unobserve(topSentinel)
+        observerRef.current.unobserve(bottomSentinel)
+      }
+    }
+  }, [isMobile, endlessCalendarData.length])
 
   // 달력 데이터를 메모이제이션하여 불필요한 재계산 방지
   const calendarData = useMemo(() => {
-    return generateCalendarDates(currentDate)
-  }, [currentDate, generateCalendarDates])
+    if (isMobile) {
+      return endlessCalendarData
+    }
+    return [{ date: currentDate, data: generateCalendarDates(currentDate), key: `${currentDate.getFullYear()}-${currentDate.getMonth()}` }]
+  }, [currentDate, generateCalendarDates, isMobile, endlessCalendarData])
+
+
+  // 초기 중간 위치 설정 여부 추적
+  const hasInitializedScroll = useRef(false)
 
   useEffect(() => {
-    setCalendarDates(calendarData)
-  }, [calendarData])
+    if (!isMobile) {
+      // 데스크톱에서는 기존 방식으로 설정
+      setCalendarDates(calendarData[0]?.data || [])
+    } else if (!hasInitializedScroll.current && endlessCalendarData.length > 0) {
+      // 모바일에서는 최초 한 번만 스크롤 위치를 중간으로 설정
+      setTimeout(() => {
+        const mobileContainer = document.querySelector('.mobile-view') as HTMLElement
+        if (mobileContainer) {
+          const scrollHeight = mobileContainer.scrollHeight
+          const clientHeight = mobileContainer.clientHeight
+          const centerScroll = (scrollHeight - clientHeight) / 2
+
+          mobileContainer.scrollTo({
+            top: centerScroll,
+            behavior: 'auto'
+          })
+          hasInitializedScroll.current = true
+        }
+      }, 200) // DOM 렌더링 완료 후 실행
+    }
+  }, [calendarData, isMobile, endlessCalendarData.length])
+
+  // 터치 이벤트 핸들러 (iOS 바운스 방지 - 더 정밀하게)
+  const handleTouchStart = useCallback((event: Event) => {
+    const touchEvent = event as TouchEvent
+    const target = event.target as HTMLElement
+    const container = target.closest('.mobile-view') as HTMLElement
+    if (!container) return
+
+    const scrollTop = container.scrollTop
+    const scrollHeight = container.scrollHeight
+    const clientHeight = container.clientHeight
+
+    // 실제로 스크롤 경계에 도달했을 때만 바운스 방지
+    // 약간의 여유를 두어 자연스러운 스크롤 허용
+    const isAtTop = scrollTop <= 5 // 상단 5px 이내
+    const isAtBottom = scrollTop >= scrollHeight - clientHeight - 5 // 하단 5px 이내
+
+    if (isAtTop) {
+      const touch = touchEvent.touches[0]
+      const startY = touch.clientY
+
+      const preventUpSwipe = (e: Event) => {
+        const touchMoveEvent = e as TouchEvent
+        const currentTouch = touchMoveEvent.touches[0]
+        if (currentTouch) {
+          const deltaY = currentTouch.clientY - startY
+          // 위로 스와이프 (deltaY < 0)이고 아직 상단에 있을 때만 방지
+          if (deltaY < -10 && container.scrollTop <= 5) {
+            e.preventDefault()
+          }
+        }
+      }
+
+      const cleanup = () => {
+        document.removeEventListener('touchmove', preventUpSwipe)
+        document.removeEventListener('touchend', cleanup)
+      }
+
+      document.addEventListener('touchmove', preventUpSwipe, { passive: false })
+      document.addEventListener('touchend', cleanup)
+    }
+
+    if (isAtBottom) {
+      const touch = touchEvent.touches[0]
+      const startY = touch.clientY
+
+      const preventDownSwipe = (e: Event) => {
+        const touchMoveEvent = e as TouchEvent
+        const currentTouch = touchMoveEvent.touches[0]
+        if (currentTouch) {
+          const deltaY = currentTouch.clientY - startY
+          // 아래로 스와이프 (deltaY > 0)이고 아직 하단에 있을 때만 방지
+          if (deltaY > 10 && container.scrollTop >= container.scrollHeight - container.clientHeight - 5) {
+            e.preventDefault()
+          }
+        }
+      }
+
+      const cleanup = () => {
+        document.removeEventListener('touchmove', preventDownSwipe)
+        document.removeEventListener('touchend', cleanup)
+      }
+
+      document.addEventListener('touchmove', preventDownSwipe, { passive: false })
+      document.addEventListener('touchend', cleanup)
+    }
+  }, [])
 
   useEffect(() => {
-    // 키보드 이벤트 리스너 등록
-    document.addEventListener('keydown', handleKeyNavigation)
+    // 키보드 이벤트 리스너 등록 (데스크톱만)
+    if (!isMobile) {
+      document.addEventListener('keydown', handleKeyNavigation)
+    } else {
+      // 모바일 스크롤 이벤트 리스너 등록
+      const mobileContainer = document.querySelector('.mobile-view')
+      if (mobileContainer) {
+        mobileContainer.addEventListener('scroll', handleMobileScroll, { passive: true })
+        mobileContainer.addEventListener('touchstart', handleTouchStart, { passive: false })
+      }
+    }
 
     // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
-      document.removeEventListener('keydown', handleKeyNavigation)
-    }
-  }, [handleKeyNavigation])
-
-  // 터치 이벤트 리스너 등록
-  useEffect(() => {
-    const calendarElement = document.querySelector('.calendar-container') as HTMLElement
-    if (calendarElement) {
-      calendarElement.addEventListener('touchstart', touchHandlers.handleTouchStart, { passive: false })
-      calendarElement.addEventListener('touchend', touchHandlers.handleTouchEnd, { passive: false })
-
-      return () => {
-        calendarElement.removeEventListener('touchstart', touchHandlers.handleTouchStart)
-        calendarElement.removeEventListener('touchend', touchHandlers.handleTouchEnd)
+      if (!isMobile) {
+        document.removeEventListener('keydown', handleKeyNavigation)
+      } else {
+        const mobileContainer = document.querySelector('.mobile-view')
+        if (mobileContainer) {
+          mobileContainer.removeEventListener('scroll', handleMobileScroll)
+          mobileContainer.removeEventListener('touchstart', handleTouchStart)
+        }
+        // 스크롤 타이머 정리
+        if (scrollTimeout.current) {
+          clearTimeout(scrollTimeout.current)
+        }
       }
     }
-  }, [touchHandlers])
+  }, [handleKeyNavigation, handleMobileScroll, handleTouchStart, isMobile])
+
+
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -687,15 +928,104 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const dayNames = useMemo(() => ['일', '월', '화', '수', '목', '금', '토'], [])
   const zodiacInfo = useMemo(() => getZodiacInfo(year), [year])
 
-  return (
-    <div className="calendar-container" tabIndex={0}>
+  // 모바일 뷰 렌더링 - 기본 달력 반복 형태
+  const renderMobileView = () => (
+    <div className={`calendar-container mobile-view ${isMobile ? 'is-mobile' : ''}`}>
+      {/* 모바일에서는 스크롤 힌트만 표시 */}
+      <div className="navigation-hints">
+        <div className="scroll-navigation-hint">
+          세로 스크롤로 달력 탐색
+        </div>
+      </div>
+
+      {/* Endless scroll calendar - 기본 달력 반복 */}
+      <div className="endless-calendar">
+        {/* 상단 센티널 (이전 달 로딩 트리거) */}
+        <div
+          ref={topSentinelRef}
+          style={{ height: '1px', visibility: 'hidden' }}
+          data-sentinel="top"
+        />
+
+        {calendarData.map((monthData) => {
+          const monthYear = monthData.date.getFullYear()
+          const monthMonth = monthData.date.getMonth()
+          const monthZodiacInfo = getZodiacInfo(monthYear)
+
+          return (
+            <div key={monthData.key} className="month-section">
+              {/* 월별 헤더 */}
+              <div className="month-header">
+                <div className="zodiac-year-container">
+                  <span className="zodiac-info" title={monthZodiacInfo.name}>
+                    {monthZodiacInfo.emoji}
+                  </span>
+                  <div className="year-month-display">
+                    {monthYear}년 {monthNames[monthMonth]}
+                  </div>
+                </div>
+              </div>
+
+              {/* 완전한 달력 (요일 헤더 + 그리드) */}
+              <div className="calendar-main">
+                <div className="calendar-weekdays">
+                  {dayNames.map((day, index) => (
+                    <div key={day} className={`weekday ${index === 0 ? 'sunday' : index === 6 ? 'saturday' : ''}`}>
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="calendar-grid">
+                  {monthData.data.map((week, weekIndex) => (
+                    <div key={weekIndex} className="calendar-week">
+                      {week.map((date, dayIndex) => (
+                        <div
+                          key={`${weekIndex}-${dayIndex}`}
+                          className={`calendar-day ${
+                            date.isCurrentMonth ? 'current-month' : 'other-month'
+                          } ${date.isToday ? 'today' : ''} ${
+                            date.isSunday || date.holiday ? 'sunday' : date.isWeekend ? 'saturday' : ''
+                          } ${date.holidayType ? `holiday-${date.holidayType}` : ''}`}
+                        >
+                          <div className="day-number">{date.date}</div>
+                          {date.lunarInfo && (
+                            <div className="lunar-info">{date.lunarInfo}</div>
+                          )}
+                          {date.holidays && date.holidays.length > 0 && (
+                            <div className="holiday-info">
+                              {date.holidays.map((holiday, index) => (
+                                <div key={index} className="holiday-item">{holiday}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* 하단 센티널 (다음 달 로딩 트리거) */}
+        <div
+          ref={bottomSentinelRef}
+          style={{ height: '1px', visibility: 'hidden' }}
+          data-sentinel="bottom"
+        />
+      </div>
+    </div>
+  )
+
+  // 데스크톱 뷰 렌더링
+  const renderDesktopView = () => (
+    <div className="calendar-container desktop-view" tabIndex={0}>
       {/* Navigation hints */}
       <div className="navigation-hints">
         <div className="keyboard-navigation-hint">
           ← → 월 이동 | ↑ ↓ 연도 이동
-        </div>
-        <div className="touch-navigation-hint">
-          좌우 스와이프: 월 이동 | 상하 스와이프: 연도 이동
         </div>
       </div>
 
@@ -704,7 +1034,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month - 1))}>
           <div className="mini-month">{month === 0 ? 12 : month}월</div>
           <div className="mini-grid">
-            {useMemo(() => generateCalendarDates(new Date(year, month - 1)).flat().slice(0, 42), [year, month, generateCalendarDates]).map((date, index) => {
+            {generateCalendarDates(new Date(year, month - 1)).flat().slice(0, 42).map((date, index) => {
               const dayOfWeek = index % 7
               const isHoliday = date.holidays && date.holidays.length > 0
               return (
@@ -732,7 +1062,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month + 1))}>
           <div className="mini-month">{month === 11 ? 1 : month + 2}월</div>
           <div className="mini-grid">
-            {useMemo(() => generateCalendarDates(new Date(year, month + 1)).flat().slice(0, 42), [year, month, generateCalendarDates]).map((date, index) => {
+            {generateCalendarDates(new Date(year, month + 1)).flat().slice(0, 42).map((date, index) => {
               const dayOfWeek = index % 7
               const isHoliday = date.holidays && date.holidays.length > 0
               return (
@@ -788,6 +1118,9 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
       </div>
     </div>
   )
+
+  // 모바일과 데스크톱 뷰 조건부 렌더링
+  return isMobile ? renderMobileView() : renderDesktopView()
 }
 
 export default Calendar
