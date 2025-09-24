@@ -28,6 +28,23 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const holidayCache = useRef(new Map<number, Array<{date: string, name: string, substitute?: boolean}>>())
   const calendarCache = useRef(new Map<string, CalendarDate[][]>())
 
+  // 개발 중 캐시 클리어 (Ctrl/Cmd + Shift + C)
+  useEffect(() => {
+    const handleCacheClear = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'C') {
+        lunarCache.current.clear()
+        holidayCache.current.clear()
+        calendarCache.current.clear()
+        console.log('캐시가 클리어되었습니다.')
+        // 페이지 새로고침으로 강제 재렌더링
+        window.location.reload()
+      }
+    }
+
+    document.addEventListener('keydown', handleCacheClear)
+    return () => document.removeEventListener('keydown', handleCacheClear)
+  }, [])
+
   // Holidays 인스턴스를 한 번만 생성하여 참조가 매 렌더마다 바뀌지 않도록 함
   const holidays = useMemo(() => new Holidays('KR'), [])
 
@@ -345,6 +362,22 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         // 제헌절은 2008년부터 공휴일이 아님 - 라이브러리 오류 수정
         if (holiday.name.includes('제헌절')) {
           continue
+        }
+
+        // 음력 9월 추석 연휴 제외 - 라이브러리에서 잘못 인식한 추석 필터링
+        if (holiday.name.includes('추석')) {
+          try {
+            const lunar = new KoreanLunarCalendar()
+            lunar.setSolarDate(year, month, day)
+            const lunarDate = lunar.getLunarCalendar()
+
+            // 음력 9월 14일, 15일, 16일인 경우 추석에서 제외
+            if (lunarDate.month === 9 && (lunarDate.day === 14 || lunarDate.day === 15 || lunarDate.day === 16)) {
+              continue
+            }
+          } catch {
+            // 음력 계산 오류 시 무시
+          }
         }
 
         uniqueHolidays.add(holiday.name)
