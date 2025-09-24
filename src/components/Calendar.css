@@ -15,22 +15,67 @@
   outline-offset: 4px;
 }
 
-.keyboard-navigation-hint {
+.navigation-hints {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: rgba(0, 123, 255, 0.1);
-  color: #007bff;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  border: 1px solid rgba(0, 123, 255, 0.2);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  z-index: 10;
 }
 
+.keyboard-navigation-hint,
+.touch-navigation-hint {
+  background: rgba(0, 123, 255, 0.1);
+  color: #007bff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  margin-bottom: 4px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+.keyboard-navigation-hint {
+  display: block;
+}
+
+.touch-navigation-hint {
+  display: none;
+  background: rgba(255, 152, 0, 0.1);
+  color: #ff9800;
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+/* 포커스 시 키보드 힌트 표시 */
 .calendar-container:focus .keyboard-navigation-hint {
   opacity: 1;
+}
+
+/* 모바일/터치 기기에서는 터치 힌트 표시 */
+@media (hover: none) and (pointer: coarse) {
+  .keyboard-navigation-hint {
+    display: none;
+  }
+
+  .touch-navigation-hint {
+    display: block;
+    opacity: 1;
+  }
+}
+
+/* 작은 화면에서 폰트 크기 조정 */
+@media (max-width: 768px) {
+  .navigation-hints {
+    top: 5px;
+    right: 5px;
+  }
+
+  .keyboard-navigation-hint,
+  .touch-navigation-hint {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
 }
 
 .calendar-header {

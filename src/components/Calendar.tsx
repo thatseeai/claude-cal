@@ -565,17 +565,84 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         onDateChange(new Date(year, month + 1, 1))
         break
       case 'ArrowUp':
-        // 다음 년도로 이동
-        event.preventDefault()
-        onDateChange(new Date(year + 1, month, 1))
-        break
-      case 'ArrowDown':
         // 이전 년도로 이동
         event.preventDefault()
         onDateChange(new Date(year - 1, month, 1))
         break
+      case 'ArrowDown':
+        // 다음 년도로 이동
+        event.preventDefault()
+        onDateChange(new Date(year + 1, month, 1))
+        break
     }
   }, [currentDate, onDateChange])
+
+  // 터치/스와이프 제스처 처리
+  const handleTouchGesture = useCallback(() => {
+    let touchStartX = 0
+    let touchStartY = 0
+    let touchStartTime = 0
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 1) {
+        const touch = event.touches[0]
+        touchStartX = touch.clientX
+        touchStartY = touch.clientY
+        touchStartTime = Date.now()
+      }
+    }
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (event.changedTouches.length === 1) {
+        const touch = event.changedTouches[0]
+        const touchEndX = touch.clientX
+        const touchEndY = touch.clientY
+        const touchEndTime = Date.now()
+
+        const deltaX = touchEndX - touchStartX
+        const deltaY = touchEndY - touchStartY
+        const deltaTime = touchEndTime - touchStartTime
+
+        // 스와이프 조건: 50px 이상 이동, 500ms 이내, 가로/세로 비율 확인
+        const minSwipeDistance = 50
+        const maxSwipeTime = 500
+        const isValidSwipe = Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance
+        const isQuickSwipe = deltaTime < maxSwipeTime
+
+        if (isValidSwipe && isQuickSwipe) {
+          const year = currentDate.getFullYear()
+          const month = currentDate.getMonth()
+
+          // 가로 스와이프 (월 이동)
+          if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            event.preventDefault()
+            if (deltaX > 0) {
+              // 오른쪽 스와이프 - 이전 달
+              onDateChange(new Date(year, month - 1, 1))
+            } else {
+              // 왼쪽 스와이프 - 다음 달
+              onDateChange(new Date(year, month + 1, 1))
+            }
+          }
+          // 세로 스와이프 (연도 이동)
+          else if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            event.preventDefault()
+            if (deltaY < 0) {
+              // 위쪽 스와이프 - 이전 년도
+              onDateChange(new Date(year - 1, month, 1))
+            } else {
+              // 아래쪽 스와이프 - 다음 년도
+              onDateChange(new Date(year + 1, month, 1))
+            }
+          }
+        }
+      }
+    }
+
+    return { handleTouchStart, handleTouchEnd }
+  }, [currentDate, onDateChange])
+
+  const touchHandlers = handleTouchGesture()
 
   // 달력 데이터를 메모이제이션하여 불필요한 재계산 방지
   const calendarData = useMemo(() => {
@@ -596,6 +663,20 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     }
   }, [handleKeyNavigation])
 
+  // 터치 이벤트 리스너 등록
+  useEffect(() => {
+    const calendarElement = document.querySelector('.calendar-container') as HTMLElement
+    if (calendarElement) {
+      calendarElement.addEventListener('touchstart', touchHandlers.handleTouchStart, { passive: false })
+      calendarElement.addEventListener('touchend', touchHandlers.handleTouchEnd, { passive: false })
+
+      return () => {
+        calendarElement.removeEventListener('touchstart', touchHandlers.handleTouchStart)
+        calendarElement.removeEventListener('touchend', touchHandlers.handleTouchEnd)
+      }
+    }
+  }, [touchHandlers])
+
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
   // 상수 데이터 메모이제이션
@@ -608,9 +689,14 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
 
   return (
     <div className="calendar-container" tabIndex={0}>
-      {/* Keyboard navigation hint */}
-      <div className="keyboard-navigation-hint">
-        ← → 월 이동 | ↑ ↓ 연도 이동
+      {/* Navigation hints */}
+      <div className="navigation-hints">
+        <div className="keyboard-navigation-hint">
+          ← → 월 이동 | ↑ ↓ 연도 이동
+        </div>
+        <div className="touch-navigation-hint">
+          좌우 스와이프: 월 이동 | 상하 스와이프: 연도 이동
+        </div>
       </div>
 
       {/* Header with mini calendars */}
