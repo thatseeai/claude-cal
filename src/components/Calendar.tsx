@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import KoreanLunarCalendar from 'korean-lunar-calendar'
 import Holidays from 'date-holidays'
 import './Calendar.css'
@@ -22,6 +22,12 @@ interface CalendarDate {
 
 const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const [calendarDates, setCalendarDates] = useState<CalendarDate[][]>([])
+
+  // 성능 최적화: 캐시 구현
+  const lunarCache = useRef(new Map<string, string>())
+  const holidayCache = useRef(new Map<number, Array<{date: string, name: string, substitute?: boolean}>>())
+  const calendarCache = useRef(new Map<string, CalendarDate[][]>())
+
   // Holidays 인스턴스를 한 번만 생성하여 참조가 매 렌더마다 바뀌지 않도록 함
   const holidays = useMemo(() => new Holidays('KR'), [])
 
@@ -34,6 +40,13 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   }, [])
 
   const getLunarDate = useCallback((year: number, month: number, day: number) => {
+    const cacheKey = `${year}-${month}-${day}`
+
+    // 캐시에서 확인
+    if (lunarCache.current.has(cacheKey)) {
+      return lunarCache.current.get(cacheKey)!
+    }
+
     try {
       const lunar = new KoreanLunarCalendar()
       lunar.setSolarDate(year, month, day)
@@ -42,30 +55,36 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
       const lunarDay = lunarDate.day
       const lunarMonth = lunarDate.month
 
+      let result = ''
+
       // 음력 1일, 15일 표시
       if (lunarDay === 1 || lunarDay === 15) {
-        return `음 ${lunarMonth}.${lunarDay}`
-      }
+        result = `음 ${lunarMonth}.${lunarDay}`
+      } else {
+        // 음력 말일 판단 - 다음날이 음력 1일인지 확인
+        const nextDay = new Date(year, month - 1, day + 1)
+        const nextLunar = new KoreanLunarCalendar()
 
-      // 음력 말일 판단 - 다음날이 음력 1일인지 확인
-      const nextDay = new Date(year, month - 1, day + 1)
-      const nextLunar = new KoreanLunarCalendar()
+        try {
+          nextLunar.setSolarDate(nextDay.getFullYear(), nextDay.getMonth() + 1, nextDay.getDate())
+          const nextLunarDate = nextLunar.getLunarCalendar()
 
-      try {
-        nextLunar.setSolarDate(nextDay.getFullYear(), nextDay.getMonth() + 1, nextDay.getDate())
-        const nextLunarDate = nextLunar.getLunarCalendar()
-
-        if (nextLunarDate.day === 1) {
-          return `음 ${lunarMonth}.${lunarDay}`
+          if (nextLunarDate.day === 1) {
+            result = `음 ${lunarMonth}.${lunarDay}`
+          }
+        } catch {
+          // 다음날이 없는 경우 (월말) 처리
         }
-      } catch {
-        // 다음날이 없는 경우 (월말) 처리
       }
 
-      return ''
+      // 결과를 캐시에 저장
+      lunarCache.current.set(cacheKey, result)
+      return result
     } catch (error) {
       console.error('Lunar date calculation error:', error)
-      return ''
+      const errorResult = ''
+      lunarCache.current.set(cacheKey, errorResult)
+      return errorResult
     }
   }, [])
 
@@ -309,7 +328,11 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   }, [isDateHoliday, checkForSubstituteHoliday])
 
   const getAllHolidayInfo = useCallback((year: number, month: number, day: number) => {
-    const holidayList = holidays.getHolidays(year)
+    // 공휴일 데이터 캐싱
+    if (!holidayCache.current.has(year)) {
+      holidayCache.current.set(year, holidays.getHolidays(year))
+    }
+    const holidayList = holidayCache.current.get(year)!
     const targetDate = new Date(year, month - 1, day)
     const allHolidays: string[] = []
     const uniqueHolidays = new Set<string>()
@@ -384,6 +407,13 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
   const generateCalendarDates = useCallback((date: Date) => {
     const year = date.getFullYear()
     const month = date.getMonth()
+    const cacheKey = `${year}-${month}`
+
+    // 캐시에서 확인
+    if (calendarCache.current.has(cacheKey)) {
+      return calendarCache.current.get(cacheKey)!
+    }
+
     const daysInMonth = getDaysInMonth(date)
     const firstDay = getFirstDayOfMonth(date)
     const today = new Date()
@@ -452,6 +482,8 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
       weeks.push(dates.slice(i, i + 7))
     }
 
+    // 캐시에 저장
+    calendarCache.current.set(cacheKey, weeks)
     return weeks
   }, [getDaysInMonth, getFirstDayOfMonth, getLunarDate, getAllHolidayInfo])
 
@@ -512,9 +544,14 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
     }
   }, [currentDate, onDateChange])
 
-  useEffect(() => {
-    setCalendarDates(generateCalendarDates(currentDate))
+  // 달력 데이터를 메모이제이션하여 불필요한 재계산 방지
+  const calendarData = useMemo(() => {
+    return generateCalendarDates(currentDate)
   }, [currentDate, generateCalendarDates])
+
+  useEffect(() => {
+    setCalendarDates(calendarData)
+  }, [calendarData])
 
   useEffect(() => {
     // 키보드 이벤트 리스너 등록
@@ -528,12 +565,13 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
-  const monthNames = [
+  // 상수 데이터 메모이제이션
+  const monthNames = useMemo(() => [
     '1월', '2월', '3월', '4월', '5월', '6월',
     '7월', '8월', '9월', '10월', '11월', '12월'
-  ]
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
-  const zodiacInfo = getZodiacInfo(year)
+  ], [])
+  const dayNames = useMemo(() => ['일', '월', '화', '수', '목', '금', '토'], [])
+  const zodiacInfo = useMemo(() => getZodiacInfo(year), [year])
 
   return (
     <div className="calendar-container" tabIndex={0}>
@@ -547,7 +585,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month - 1))}>
           <div className="mini-month">{month === 0 ? 12 : month}월</div>
           <div className="mini-grid">
-            {generateCalendarDates(new Date(year, month - 1)).flat().slice(0, 42).map((date, index) => {
+            {useMemo(() => generateCalendarDates(new Date(year, month - 1)).flat().slice(0, 42), [year, month, generateCalendarDates]).map((date, index) => {
               const dayOfWeek = index % 7
               const isHoliday = date.holidays && date.holidays.length > 0
               return (
@@ -575,7 +613,7 @@ const Calendar: React.FC<CalendarProps> = ({ currentDate, onDateChange }) => {
         <div className="mini-calendar" onClick={() => navigateToMonth(new Date(year, month + 1))}>
           <div className="mini-month">{month === 11 ? 1 : month + 2}월</div>
           <div className="mini-grid">
-            {generateCalendarDates(new Date(year, month + 1)).flat().slice(0, 42).map((date, index) => {
+            {useMemo(() => generateCalendarDates(new Date(year, month + 1)).flat().slice(0, 42), [year, month, generateCalendarDates]).map((date, index) => {
               const dayOfWeek = index % 7
               const isHoliday = date.holidays && date.holidays.length > 0
               return (
