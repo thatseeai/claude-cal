@@ -22,3 +22,36 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code specific
+.claude/*
+*.claude-session
+.claude-cache/
+
+# Development and debugging
+*.tmp
+*.temp
+coverage/
+.nyc_output/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Package manager specific
+.pnpm-store/
+.yarn/
+.yarnrc
+.npmrc.local
+
+# Testing
+test-results/
+playwright-report/
+
+# Temporary files
+*.bak
+*.orig
+*~
