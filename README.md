@@ -4,7 +4,7 @@ React + TypeScript + Vite로 만든 한국 전통 달력 웹 앱입니다.
 
 ## 🌐 라이브 데모
 
-👉 **[https://thatseeyou.github.io/claude-cal/](https://thatseeyou.github.io/claude-cal/)**
+👉 **[https://thatseeai.github.io/claude-cal/](https://thatseeai.github.io/claude-cal/)**
 
 ## ✨ 주요 특징
 
@@ -86,7 +86,7 @@ pnpm preview
 
 GitHub Actions를 통해 자동으로 GitHub Pages에 배포됩니다.
 
-배포된 사이트: [https://thatseeyou.github.io/claude-cal/](https://thatseeyou.github.io/claude-cal/)
+배포된 사이트: [https://thatseeai.github.io/claude-cal/](https://thatseeai.github.io/claude-cal/)
 
 ## 📊 프로젝트 현황
 
@@ -98,7 +98,7 @@ GitHub Actions를 통해 자동으로 GitHub Pages에 배포됩니다.
 ## 🖼️ 미리보기
 
 실제 스크린샷은 라이브 데모에서 확인하실 수 있습니다:
-👉 **[https://thatseeyou.github.io/claude-cal/](https://thatseeyou.github.io/claude-cal/)**
+👉 **[https://thatseeai.github.io/claude-cal/](https://thatseeai.github.io/claude-cal/)**
 
 ### 주요 화면
 - 📅 **메인 달력**: 전통적인 달력 디자인으로 음력과 공휴일 정보 표시
